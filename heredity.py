@@ -38,7 +38,6 @@ PROBS = {
 
 
 def main():
-
     # Check for proper usage
     if len(sys.argv) != 2:
         sys.exit("Usage: python heredity.py data.csv")
@@ -76,7 +75,6 @@ def main():
         # Loop over all sets of people who might have the gene
         for one_gene in powerset(names):
             for two_genes in powerset(names - one_gene):
-
                 # Update probabilities with new joint probability
                 p = joint_probability(people, one_gene, two_genes, have_trait)
                 update(probabilities, one_gene, two_genes, have_trait, p)
@@ -128,6 +126,20 @@ def powerset(s):
     ]
 
 
+def person_has_parents(people, person):
+    if people.get(person)["father"] is not None and people.get(person)["mother"] is not None:
+        return True
+    else:
+        return False
+
+
+def join_prob(joint_prob, prob):
+    if joint_prob == 0.0:
+        return prob
+    else:
+        return joint_prob * prob
+
+
 def joint_probability(people, one_gene, two_genes, have_trait):
     """
     Compute and return a joint probability.
@@ -139,7 +151,46 @@ def joint_probability(people, one_gene, two_genes, have_trait):
         * everyone in set `have_trait` has the trait, and
         * everyone not in set` have_trait` does not have the trait.
     """
-    raise NotImplementedError
+
+    joint_prob = 0.0
+
+    for person in one_gene:
+        if not person_has_parents(people, person):
+            joint_prob = join_prob(joint_prob, PROBS["gene"][1])
+
+    for person in two_genes:
+        if not person_has_parents(people, person):
+            joint_prob = join_prob(joint_prob, PROBS["gene"][2])
+
+    for person in people:
+        if person not in one_gene and person not in two_genes:
+            if not person_has_parents(people, person):
+                joint_prob = join_prob(joint_prob, PROBS["gene"][0])
+
+    for person in have_trait:
+        if not person_has_parents(people, person):
+            if person in one_gene:
+                prob = PROBS["trait"][1][True] + PROBS["mutation"]
+            elif person in two_genes:
+                prob = PROBS["trait"][2][True] + PROBS["mutation"]
+            else:
+                prob = PROBS["trait"][0][True] + PROBS["mutation"]
+
+            joint_prob = join_prob(joint_prob, prob)
+
+    for person in people:
+        if person not in have_trait:
+            if not person_has_parents(people, person):
+                if person in one_gene:
+                    prob = PROBS["trait"][1][False] + PROBS["mutation"]
+                elif person in two_genes:
+                    prob = PROBS["trait"][2][False] + PROBS["mutation"]
+                else:
+                    prob = PROBS["trait"][0][False] + PROBS["mutation"]
+
+                joint_prob = join_prob(joint_prob, prob)
+
+    return joint_prob
 
 
 def update(probabilities, one_gene, two_genes, have_trait, p):
@@ -149,7 +200,18 @@ def update(probabilities, one_gene, two_genes, have_trait, p):
     Which value for each distribution is updated depends on whether
     the person is in `have_gene` and `have_trait`, respectively.
     """
-    raise NotImplementedError
+    for person in probabilities:
+        if person in one_gene:
+            probabilities[person]["gene"][1] = p
+        elif person in two_genes:
+            probabilities[person]["gene"][2] = p
+        else:
+            probabilities[person]["gene"][0] = p
+
+        if person in have_trait:
+            probabilities[person]["trait"][1] = p
+        else:
+            probabilities[person]["trait"][0] = p
 
 
 def normalize(probabilities):
@@ -157,7 +219,40 @@ def normalize(probabilities):
     Update `probabilities` such that each probability distribution
     is normalized (i.e., sums to 1, with relative proportions the same).
     """
-    raise NotImplementedError
+
+    for person in probabilities:
+        probabilities[person]["gene"] = normalize_dict(probabilities[person]["gene"])
+        probabilities[person]["trait"] = normalize_dict(probabilities[person]["trait"])
+
+    '''
+    probabilities = {
+        person: {
+            "gene": {
+                2: 0,
+                1: 0,
+                0: 0
+            },
+            "trait": {
+                True: 0,
+                False: 0
+            }
+        }
+        '''
+
+
+def normalize_dict(probs_dict):
+    sum_probabilities = 0.0
+
+    for key in probs_dict:
+        sum_probabilities += probs_dict.get(key)
+
+    alfa = 1 / sum_probabilities
+
+    for key in probs_dict:
+        new_value = alfa * probs_dict.get(key)
+        probs_dict[key] = new_value
+
+    return probs_dict
 
 
 if __name__ == "__main__":
