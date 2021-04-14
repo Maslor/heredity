@@ -133,11 +133,13 @@ def person_has_parents(people, person):
         return False
 
 
-def join_prob(joint_prob, prob):
-    if joint_prob == 0.0:
-        return prob
+def calculate_parent_prob(parent, one_gene, two_genes):
+    if parent in one_gene:
+        return 0.5
+    elif parent in two_genes:
+        return 1 - PROBS["mutation"]
     else:
-        return joint_prob * prob
+        return PROBS["mutation"]
 
 
 def joint_probability(people, one_gene, two_genes, have_trait):
@@ -152,45 +154,47 @@ def joint_probability(people, one_gene, two_genes, have_trait):
         * everyone not in set` have_trait` does not have the trait.
     """
 
-    joint_prob = 0.0
-
-    for person in one_gene:
-        if not person_has_parents(people, person):
-            joint_prob = join_prob(joint_prob, PROBS["gene"][1])
-
-    for person in two_genes:
-        if not person_has_parents(people, person):
-            joint_prob = join_prob(joint_prob, PROBS["gene"][2])
+    probability = 0.0
 
     for person in people:
-        if person not in one_gene and person not in two_genes:
-            if not person_has_parents(people, person):
-                joint_prob = join_prob(joint_prob, PROBS["gene"][0])
+        if person in one_gene:
+            number_of_genes = 1
+        elif person in two_genes:
+            number_of_genes = 2
+        else:
+            number_of_genes = 0
 
-    for person in have_trait:
         if not person_has_parents(people, person):
-            if person in one_gene:
-                prob = PROBS["trait"][1][True] + PROBS["mutation"]
-            elif person in two_genes:
-                prob = PROBS["trait"][2][True] + PROBS["mutation"]
-            else:
-                prob = PROBS["trait"][0][True] + PROBS["mutation"]
+            probability = join_probs(probability, PROBS["gene"][number_of_genes])
+        else:
+            father_prob, mother_prob = get_prob_on_parents(one_gene, person, two_genes, people)
+            if number_of_genes == 0:
+                probability = join_probs(probability, (1 - father_prob) * (1 - mother_prob))
+            elif number_of_genes == 1:
+                probability = join_probs(probability, father_prob * (1 - mother_prob) + mother_prob * (1 - father_prob))
+            elif number_of_genes == 2:
+                probability = join_probs(probability, father_prob * mother_prob)
 
-            joint_prob = join_prob(joint_prob, prob)
+        has_trait = person in have_trait
+        probability = join_probs(probability, PROBS["trait"][number_of_genes][has_trait])
 
-    for person in people:
-        if person not in have_trait:
-            if not person_has_parents(people, person):
-                if person in one_gene:
-                    prob = PROBS["trait"][1][False] + PROBS["mutation"]
-                elif person in two_genes:
-                    prob = PROBS["trait"][2][False] + PROBS["mutation"]
-                else:
-                    prob = PROBS["trait"][0][False] + PROBS["mutation"]
+    return probability
 
-                joint_prob = join_prob(joint_prob, prob)
 
-    return joint_prob
+def join_probs(probability, prob):
+    if probability == 0:
+        return prob
+    else:
+        return probability * prob
+
+
+def get_prob_on_parents(one_gene, person, two_genes, people):
+    father = people.get(person)["father"]
+    mother = people.get(person)["mother"]
+    father_prob = calculate_parent_prob(father, one_gene, two_genes)
+    mother_prob = calculate_parent_prob(mother, one_gene, two_genes)
+
+    return father_prob, mother_prob
 
 
 def update(probabilities, one_gene, two_genes, have_trait, p):
@@ -202,16 +206,16 @@ def update(probabilities, one_gene, two_genes, have_trait, p):
     """
     for person in probabilities:
         if person in one_gene:
-            probabilities[person]["gene"][1] = p
+            probabilities[person]["gene"][1] += p
         elif person in two_genes:
-            probabilities[person]["gene"][2] = p
+            probabilities[person]["gene"][2] += p
         else:
-            probabilities[person]["gene"][0] = p
+            probabilities[person]["gene"][0] += p
 
         if person in have_trait:
-            probabilities[person]["trait"][1] = p
+            probabilities[person]["trait"][1] += p
         else:
-            probabilities[person]["trait"][0] = p
+            probabilities[person]["trait"][0] += p
 
 
 def normalize(probabilities):
@@ -223,21 +227,6 @@ def normalize(probabilities):
     for person in probabilities:
         probabilities[person]["gene"] = normalize_dict(probabilities[person]["gene"])
         probabilities[person]["trait"] = normalize_dict(probabilities[person]["trait"])
-
-    '''
-    probabilities = {
-        person: {
-            "gene": {
-                2: 0,
-                1: 0,
-                0: 0
-            },
-            "trait": {
-                True: 0,
-                False: 0
-            }
-        }
-        '''
 
 
 def normalize_dict(probs_dict):
